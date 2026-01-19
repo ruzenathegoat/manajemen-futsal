@@ -51,8 +51,7 @@ Modern, SaaS-style futsal field reservation system for Android, iOS, and Web (Ch
 ## Firestore Structure (High-Level)
 ```
 users/{uid}
-  name, email, role, photoUrl, themePreference, securityQuestion,
-  securityAnswer, createdAt, lastLogin
+  name, email, role, photoUrl, themePreference, createdAt, lastLogin
 
 fields/{fieldId}
   name, description, basePrice, imageUrl, isActive, facilities, createdAt, updatedAt
@@ -63,9 +62,6 @@ bookings/{bookingId}
 
 ## Auth Flow Notes
 - Admin accounts are created manually in Firestore.
-- Registration in-app always creates `role = "user"`.
-- Forgot password uses manual security verification after login.
-  Users must log in again to verify the security question and update password.
 ```
 
 ## Firestore Rules
