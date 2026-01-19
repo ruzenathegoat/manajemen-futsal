@@ -14,7 +14,7 @@ Modern, SaaS-style futsal field reservation system for Android, iOS, and Web (Ch
 
 ## Tech Stack
 - Flutter (latest stable)
-- Firebase Auth, Firestore, Storage
+- Firebase Auth, Firestore,
 - Provider state management
 - fl_chart, table_calendar, mobile_scanner, qr_flutter
 
