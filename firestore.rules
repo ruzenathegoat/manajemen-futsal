@@ -1,0 +1,74 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==================== USERS COLLECTION ====================
+    match /users/{userId} {
+      // Allow read if:
+      // 1. User is reading their own document, OR
+      // 2. User is an admin (can read all user documents)
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || 
+        isAdmin(request.auth.uid)
+      );
+      
+      // Allow create if:
+      // User is creating their own document with role='user'
+      allow create: if request.auth != null && 
+        request.auth.uid == userId &&
+        request.resource.data.role == 'user';
+      
+      // Allow update if:
+      // 1. User is updating their own document (cannot change role), OR
+      // 2. User is an admin
+      allow update: if request.auth != null && (
+        (request.auth.uid == userId && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])) ||
+        isAdmin(request.auth.uid)
+      );
+      
+      // Only admins can delete
+      allow delete: if request.auth != null && isAdmin(request.auth.uid);
+    }
+
+    // ==================== FIELDS COLLECTION ====================
+    match /fields/{fieldId} {
+      // Anyone authenticated can read
+      allow read: if request.auth != null;
+      
+      // Only admins can write
+      allow create, update, delete: if request.auth != null && isAdmin(request.auth.uid);
+    }
+
+    // ==================== BOOKINGS COLLECTION ====================
+    match /bookings/{bookingId} {
+      // Allow read if user owns the booking or is admin
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin(request.auth.uid)
+      );
+      
+      // Allow create if user is creating their own booking
+      allow create: if request.auth != null && 
+        request.resource.data.userId == request.auth.uid;
+      
+      // Allow update if:
+      // 1. User owns the booking and is cancelling, OR
+      // 2. User is admin
+      allow update: if request.auth != null && (
+        (resource.data.userId == request.auth.uid) ||
+        isAdmin(request.auth.uid)
+      );
+      
+      // Only admins can delete
+      allow delete: if request.auth != null && isAdmin(request.auth.uid);
+    }
+
+    // ==================== HELPER FUNCTION ====================
+    function isAdmin(uid) {
+      let userDoc = get(/databases/$(database)/documents/users/$(uid));
+      return userDoc != null && userDoc.data.role == 'admin';
+    }
+  }
+}

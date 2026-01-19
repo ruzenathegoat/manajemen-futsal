@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "319551134126",
+    "project_id": "pmluas-fcde5",
+    "storage_bucket": "pmluas-fcde5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:319551134126:android:467d2f7a1a1e156dee503f",
+        "android_client_info": {
+          "package_name": "com.example.katalog_film_uas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeyydqJRxTr8zLU9zf94F2ahxpoe0OLgw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:319551134126:android:2dce685e46d07a25ee503f",
+        "android_client_info": {
+          "package_name": "com.example.manajemen_futsal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeyydqJRxTr8zLU9zf94F2ahxpoe0OLgw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:319551134126:android:1dde59a72bce263aee503f",
+        "android_client_info": {
+          "package_name": "com.example.tugas_uas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeyydqJRxTr8zLU9zf94F2ahxpoe0OLgw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
