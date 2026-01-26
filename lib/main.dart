@@ -1,25 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-
+import 'package:intl/date_symbol_data_local.dart';
 import 'firebase_options.dart';
-import 'core/theme/app_theme.dart';
-
+import 'core/core.dart';
+// Import Screens & Providers
 import 'providers/auth_provider.dart';
-import 'providers/theme_provider.dart';
 import 'providers/booking_provider.dart';
-import 'providers/field_provider.dart';
-
 import 'screens/auth/login_screen.dart';
-import 'screens/user_home/user_dashboard_screen.dart';
-import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/admin/admin_dashboard.dart';
+import 'screens/user/user_dashboard.dart';
+
+import 'providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set system UI overlay style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: AppColors.backgroundDark,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+  
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
+  
+  // Initialize Indonesian locale for date formatting
+  await initializeDateFormatting('id_ID', null);
+  
   runApp(const MyApp());
 }
 
@@ -30,27 +44,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<ThemeProvider>(
-          create: (_) => ThemeProvider(),
-        ),
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(),
-        ),
-        ChangeNotifierProvider<BookingProvider>(
-          create: (_) => BookingProvider(),
-        ),
-        ChangeNotifierProvider<FieldProvider>(
-          create: (_) => FieldProvider(),
-        ),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => BookingProvider()),
       ],
       child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
+        builder: (context, themeProvider, child) {
           return MaterialApp(
             title: 'FutsalPro',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeProvider.themeMode,
+            // Use the new design system themes
+            theme: themeProvider.lightTheme,
+            darkTheme: themeProvider.darkTheme,
+            themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
             home: const AuthWrapper(),
           );
         },
@@ -58,35 +64,43 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
-class AuthWrapper extends StatelessWidget {
+// --- LOGIC PEMISAH ROLE ---
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
   @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    // Cek status user saat aplikasi pertama dibuka
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<AuthProvider>(context, listen: false).checkCurrentUser();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, auth, _) {
-        // INITIAL / LOADING STATE
-        if (auth.status == AuthStatus.initial ||
-            auth.status == AuthStatus.loading) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
+    final authProvider = Provider.of<AuthProvider>(context);
 
-        // AUTHENTICATED
-        if (auth.status == AuthStatus.authenticated && auth.user != null) {
-          if (auth.isAdmin) {
-            return const AdminDashboardScreen();
-          }
-          return const UserDashboardScreen();
-        }
+    // 1. Jika sedang loading (cek token/firestore), tampilkan loading
+    if (authProvider.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-        // UNAUTHENTICATED
-        return const LoginScreen();
-      },
-    );
+    // 2. Jika userModel null, berarti belum login -> Ke Login Screen
+    if (authProvider.userModel == null) {
+      return const LoginScreen();
+    }
+
+    // 3. Jika login, cek Role
+    if (authProvider.userModel!.role == 'admin') {
+      return const AdminDashboard();
+    } else {
+      return const UserDashboard();
+    }
   }
 }

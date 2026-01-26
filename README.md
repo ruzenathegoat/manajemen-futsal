@@ -14,45 +14,14 @@ Modern, SaaS-style futsal field reservation system for Android, iOS, and Web (Ch
 
 ## Tech Stack
 - Flutter (latest stable)
-- Firebase Auth, Firestore, Storage
+- Firebase Auth, Firestore,
 - Provider state management
 - fl_chart, table_calendar, mobile_scanner, qr_flutter
-
-## Setup
-1. Install dependencies:
-   ```bash
-   flutter pub get
-   ```
-2. Configure Firebase:
-   ```bash
-   dart pub global activate flutterfire_cli
-   flutterfire configure
-   ```
-3. **Deploy Firestore Rules** (IMPORTANT):
-   - Go to [Firebase Console](https://console.firebase.google.com)
-   - Select your project
-   - Navigate to **Firestore Database** → **Rules**
-   - Copy the contents from `firestore.rules` in this project
-   - Paste and click **Publish**
-   
-   Or use Firebase CLI:
-   ```bash
-   npm install -g firebase-tools
-   firebase login
-   firebase init firestore
-   firebase deploy --only firestore:rules
-   ```
-
-4. Run:
-   ```bash
-   flutter run -d chrome
-   ```
 
 ## Firestore Structure (High-Level)
 ```
 users/{uid}
-  name, email, role, photoUrl, themePreference, securityQuestion,
-  securityAnswer, createdAt, lastLogin
+  name, email, role, photoUrl, themePreference, createdAt, lastLogin
 
 fields/{fieldId}
   name, description, basePrice, imageUrl, isActive, facilities, createdAt, updatedAt
@@ -60,16 +29,6 @@ fields/{fieldId}
 bookings/{bookingId}
   userId, userName, userEmail, fieldId, fieldName, date, timeSlot,
   basePrice, finalPrice, status, qrCodeData, createdAt
-
-## Auth Flow Notes
-- Admin accounts are created manually in Firestore.
-- Registration in-app always creates `role = "user"`.
-- Forgot password uses manual security verification after login.
-  Users must log in again to verify the security question and update password.
-```
-
-## Firestore Rules
-The complete Firestore rules are in `firestore.rules`. Deploy them to your Firebase project.
 
 **Key security features:**
 - Users can only read/write their own documents

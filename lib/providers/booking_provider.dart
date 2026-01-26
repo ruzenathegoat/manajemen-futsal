@@ -1,222 +1,205 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/booking_model.dart';
 import '../models/field_model.dart';
-import '../models/user_model.dart';
-import '../services/booking_service.dart';
 
-class BookingProvider extends ChangeNotifier {
-  final BookingService _bookingService = BookingService();
+/// BookingProvider manages real-time booking state to prevent double-booking
+/// Uses Firestore streams for live synchronization across all users
+class BookingProvider with ChangeNotifier {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  List<BookingModel> _userBookings = [];
-  List<BookingModel> _upcomingBookings = [];
-  List<BookingModel> _allBookings = [];
-  List<String> _bookedSlots = [];
-  Map<String, dynamic>? _statistics;
-  
-  bool _isLoading = false;
-  String? _error;
-
-  // Booking form state
-  FieldModel? _selectedField;
+  // Current field being viewed
+  FieldModel? _currentField;
   DateTime? _selectedDate;
-  String? _selectedTimeSlot;
 
-  List<BookingModel> get userBookings => _userBookings;
-  List<BookingModel> get upcomingBookings => _upcomingBookings;
-  List<BookingModel> get allBookings => _allBookings;
-  List<String> get bookedSlots => _bookedSlots;
-  Map<String, dynamic>? get statistics => _statistics;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
+  // Real-time booked slots for current field/date
+  List<int> _bookedSlots = [];
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  FieldModel? get selectedField => _selectedField;
+  // Stream subscription for real-time updates
+  StreamSubscription<QuerySnapshot>? _bookingSlotsSubscription;
+
+  // Getters
+  FieldModel? get currentField => _currentField;
   DateTime? get selectedDate => _selectedDate;
-  String? get selectedTimeSlot => _selectedTimeSlot;
+  List<int> get bookedSlots => List.unmodifiable(_bookedSlots);
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
-  // Subscribe to user bookings
-  void subscribeToUserBookings(String userId) {
-    _bookingService.getUserBookings(userId).listen((bookings) {
-      _userBookings = bookings;
-      notifyListeners();
-    });
+  /// Initialize real-time listener for a specific field and date
+  void startListening(FieldModel field, DateTime date) {
+    // Cancel existing subscription
+    _bookingSlotsSubscription?.cancel();
 
-    _bookingService.getUpcomingBookings(userId).listen((bookings) {
-      _upcomingBookings = bookings;
-      notifyListeners();
-    });
-  }
-
-  // Subscribe to all bookings (admin)
-  void subscribeToAllBookings() {
-    _bookingService.getAllBookings().listen((bookings) {
-      _allBookings = bookings;
-      notifyListeners();
-    });
-  }
-
-  // Stream bookings by date (admin calendar)
-  Stream<List<BookingModel>> streamBookingsByDate(DateTime date) {
-    return _bookingService.getBookingsByDate(date);
-  }
-
-  // Set selected field
-  void setSelectedField(FieldModel? field) {
-    _selectedField = field;
-    _selectedTimeSlot = null; // Reset time slot when field changes
-    notifyListeners();
-  }
-
-  // Set selected date and load booked slots
-  Future<void> setSelectedDate(DateTime date) async {
+    _currentField = field;
     _selectedDate = date;
-    _selectedTimeSlot = null;
-    notifyListeners();
-
-    if (_selectedField != null) {
-      await loadBookedSlots(_selectedField!.fieldId, date);
-    }
-  }
-
-  // Set selected time slot
-  void setSelectedTimeSlot(String? timeSlot) {
-    _selectedTimeSlot = timeSlot;
-    notifyListeners();
-  }
-
-  // Load booked slots for a field on a specific date
-  Future<void> loadBookedSlots(String fieldId, DateTime date) async {
-    try {
-      _bookedSlots = await _bookingService.getBookedSlots(
-        fieldId: fieldId,
-        date: date,
-      );
-      notifyListeners();
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-    }
-  }
-
-  // Create booking
-  Future<BookingModel?> createBooking(UserModel user) async {
-    if (_selectedField == null || _selectedDate == null || _selectedTimeSlot == null) {
-      _error = 'Silakan pilih lapangan, tanggal, dan waktu';
-      notifyListeners();
-      return null;
-    }
-
     _isLoading = true;
-    _error = null;
+    _errorMessage = null;
     notifyListeners();
 
-    try {
-      final booking = await _bookingService.createBooking(
-        user: user,
-        field: _selectedField!,
-        date: _selectedDate!,
-        timeSlot: _selectedTimeSlot!,
-      );
+    final dateString = date.toIso8601String().split('T')[0];
 
-      _isLoading = false;
-      clearBookingForm();
-      notifyListeners();
-      return booking;
-    } catch (e) {
-      _isLoading = false;
-      _error = e.toString();
-      notifyListeners();
-      return null;
+    // Setup real-time stream listener
+    _bookingSlotsSubscription = _db
+        .collection('bookings')
+        .where('fieldId', isEqualTo: field.id)
+        .where('date', isEqualTo: dateString)
+        .where('status', whereIn: ['booked', 'approved'])
+        .snapshots()
+        .listen(
+      (snapshot) {
+        _bookedSlots = _extractBookedSlots(snapshot.docs);
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        _errorMessage = 'Error loading booking data: $error';
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
+
+  /// Extract all booked time slots from documents (considering duration)
+  List<int> _extractBookedSlots(List<QueryDocumentSnapshot> docs) {
+    final Set<int> slots = {};
+
+    for (var doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final startSlot = data['timeSlot'] as int;
+      final duration = data['duration'] as int? ?? 1;
+
+      for (int i = 0; i < duration; i++) {
+        slots.add(startSlot + i);
+      }
+    }
+
+    return slots.toList()..sort();
+  }
+
+  /// Change selected date (triggers new stream subscription)
+  void changeDate(DateTime newDate) {
+    if (_currentField != null) {
+      startListening(_currentField!, newDate);
     }
   }
 
-  // Update booking status
-  Future<bool> updateBookingStatus({
-    required String bookingId,
-    required String status,
-    String? cancelReason,
+  /// Create booking with validation to prevent double-booking
+  /// Uses optimistic locking with real-time data + server-side re-validation
+  Future<BookingModel> createBookingWithValidation({
+    required String userId,
+    required String userName,
+    required FieldModel field,
+    required DateTime date,
+    required int timeSlot,
+    required int duration,
+    required int totalCost,
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    final dateString = date.toIso8601String().split('T')[0];
+    final qrCode = 'BK-${DateTime.now().millisecondsSinceEpoch}-$userId';
 
-    try {
-      await _bookingService.updateBookingStatus(
-        bookingId: bookingId,
-        status: status,
-        cancelReason: cancelReason,
-      );
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } catch (e) {
-      _isLoading = false;
-      _error = e.toString();
-      notifyListeners();
-      return false;
+    // Step 1: Validate against real-time cached data (optimistic check)
+    for (int i = 0; i < duration; i++) {
+      final requestedSlot = timeSlot + i;
+      if (_bookedSlots.contains(requestedSlot)) {
+        throw BookingConflictException(
+          'Slot ${requestedSlot}:00 sudah dipesan. Silakan pilih waktu lain.',
+        );
+      }
+      if (requestedSlot >= 22) {
+        throw BookingConflictException(
+          'Booking melampaui jam operasional (max 22:00).',
+        );
+      }
     }
-  }
 
-  // Check-in via QR code
-  Future<BookingModel?> checkInWithQR(String qrCodeData) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+    // Step 2: Re-fetch and validate from server (pessimistic check)
+    final serverCheck = await _db
+        .collection('bookings')
+        .where('fieldId', isEqualTo: field.id)
+        .where('date', isEqualTo: dateString)
+        .where('status', whereIn: ['booked', 'approved'])
+        .get();
 
-    try {
-      final booking = await _bookingService.checkInBooking(qrCodeData);
-      _isLoading = false;
-      notifyListeners();
-      return booking;
-    } catch (e) {
-      _isLoading = false;
-      _error = e.toString();
-      notifyListeners();
-      return null;
+    final Set<int> serverSlots = {};
+    for (var doc in serverCheck.docs) {
+      final data = doc.data();
+      final existingStart = data['timeSlot'] as int;
+      final existingDuration = data['duration'] as int? ?? 1;
+
+      for (int i = 0; i < existingDuration; i++) {
+        serverSlots.add(existingStart + i);
+      }
     }
-  }
 
-  // Get booking by ID
-  Future<BookingModel?> getBookingById(String bookingId) async {
-    try {
-      return await _bookingService.getBookingById(bookingId);
-    } catch (e) {
-      _error = e.toString();
-      notifyListeners();
-      return null;
+    // Validate against server data
+    for (int i = 0; i < duration; i++) {
+      final requestedSlot = timeSlot + i;
+      if (serverSlots.contains(requestedSlot)) {
+        // Update local cache
+        _bookedSlots = serverSlots.toList()..sort();
+        notifyListeners();
+        
+        throw BookingConflictException(
+          'Slot ${requestedSlot}:00 baru saja dipesan user lain. Silakan pilih waktu lain.',
+        );
+      }
     }
+
+    // Step 3: Create the booking document
+    final bookingRef = _db.collection('bookings').doc();
+    final booking = BookingModel(
+      id: bookingRef.id,
+      userId: userId,
+      userName: userName,
+      fieldId: field.id,
+      fieldName: field.name,
+      date: date,
+      timeSlot: timeSlot,
+      duration: duration,
+      totalCost: totalCost,
+      qrCode: qrCode,
+    );
+
+    await bookingRef.set({
+      ...booking.toMap(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    return booking;
   }
 
-  // Load statistics
-  Future<void> loadStatistics({DateTime? startDate, DateTime? endDate}) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      _statistics = await _bookingService.getBookingStatistics(
-        startDate: startDate,
-        endDate: endDate,
-      );
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = e.toString();
-      notifyListeners();
+  /// Check if specific slots are available (for UI validation)
+  bool areSlotsAvailable(int startSlot, int duration) {
+    for (int i = 0; i < duration; i++) {
+      final slot = startSlot + i;
+      if (_bookedSlots.contains(slot) || slot >= 22) {
+        return false;
+      }
     }
+    return true;
   }
 
-  // Clear booking form
-  void clearBookingForm() {
-    _selectedField = null;
-    _selectedDate = null;
-    _selectedTimeSlot = null;
-    _bookedSlots = [];
-    notifyListeners();
+  /// Clean up subscriptions
+  void stopListening() {
+    _bookingSlotsSubscription?.cancel();
+    _bookingSlotsSubscription = null;
   }
 
-  // Clear error
-  void clearError() {
-    _error = null;
-    notifyListeners();
+  @override
+  void dispose() {
+    stopListening();
+    super.dispose();
   }
+}
+
+/// Custom exception for booking conflicts
+class BookingConflictException implements Exception {
+  final String message;
+  BookingConflictException(this.message);
+
+  @override
+  String toString() => message;
 }

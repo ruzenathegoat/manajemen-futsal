@@ -26,15 +26,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -48,29 +42,47 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_WEB_API_KEY',
-    appId: '1:YOUR_APP_ID:web:YOUR_WEB_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'your-project-id',
-    authDomain: 'your-project-id.firebaseapp.com',
-    storageBucket: 'your-project-id.appspot.com',
+    apiKey: 'AIzaSyBriU3d0yT4tqICtTndMivx9Bt76hbiVro',
+    appId: '1:707614370911:web:cdd612e12eb940e642bfea',
+    messagingSenderId: '707614370911',
+    projectId: 'futsalpro-uas',
+    authDomain: 'futsalpro-uas.firebaseapp.com',
+    storageBucket: 'futsalpro-uas.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: '1:YOUR_APP_ID:android:YOUR_ANDROID_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'your-project-id',
-    storageBucket: 'your-project-id.appspot.com',
+    apiKey: 'AIzaSyB_kREQzaqlTFoOFo92URPjqQHwK8141Ks',
+    appId: '1:707614370911:android:4377587c5e70021f42bfea',
+    messagingSenderId: '707614370911',
+    projectId: 'futsalpro-uas',
+    storageBucket: 'futsalpro-uas.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_IOS_API_KEY',
-    appId: '1:YOUR_APP_ID:ios:YOUR_IOS_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'your-project-id',
-    storageBucket: 'your-project-id.appspot.com',
-    iosClientId: 'YOUR_IOS_CLIENT_ID',
+    apiKey: 'AIzaSyD91dJZaiAjBWAoxN1MP8NbzWn5V2dAyNE',
+    appId: '1:707614370911:ios:e621f02f129019a242bfea',
+    messagingSenderId: '707614370911',
+    projectId: 'futsalpro-uas',
+    storageBucket: 'futsalpro-uas.firebasestorage.app',
     iosBundleId: 'com.example.manajemenFutsal',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyD91dJZaiAjBWAoxN1MP8NbzWn5V2dAyNE',
+    appId: '1:707614370911:ios:e621f02f129019a242bfea',
+    messagingSenderId: '707614370911',
+    projectId: 'futsalpro-uas',
+    storageBucket: 'futsalpro-uas.firebasestorage.app',
+    iosBundleId: 'com.example.manajemenFutsal',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyBriU3d0yT4tqICtTndMivx9Bt76hbiVro',
+    appId: '1:707614370911:web:24ec0d2f14cc8a0842bfea',
+    messagingSenderId: '707614370911',
+    projectId: 'futsalpro-uas',
+    authDomain: 'futsalpro-uas.firebaseapp.com',
+    storageBucket: 'futsalpro-uas.firebasestorage.app',
+  );
+
 }

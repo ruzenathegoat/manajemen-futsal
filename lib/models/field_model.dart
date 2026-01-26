@@ -1,77 +1,79 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class FieldModel {
-  final String fieldId;
+  final String id;
   final String name;
   final String description;
-  final double basePrice;
-  final String? imageUrl;
+  final String type; // Field type: Vinyl, Rumput Sintetis, dll
+  final int basePrice; // Harga per jam
+  final String imageUrl; // URL gambar (bisa placeholder dulu)
+  final List<String> facilities; // Contoh: Wifi, Toilet, Parkir
   final bool isActive;
-  final List<String> facilities;
-  final DateTime createdAt;
-  final DateTime? updatedAt;
+  final bool isPopular; // Flag for popular/featured fields
 
   FieldModel({
-    required this.fieldId,
+    required this.id,
     required this.name,
     required this.description,
+    this.type = 'Futsal',
     required this.basePrice,
-    this.imageUrl,
+    required this.imageUrl,
+    required this.facilities,
     this.isActive = true,
-    this.facilities = const [],
-    required this.createdAt,
-    this.updatedAt,
+    this.isPopular = false,
   });
 
-  factory FieldModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  /// Alias for isActive - used in UI for availability display
+  bool get isAvailable => isActive;
+
+  factory FieldModel.fromMap(Map<String, dynamic> data, String documentId) {
     return FieldModel(
-      fieldId: doc.id,
+      id: documentId,
       name: data['name'] ?? '',
       description: data['description'] ?? '',
-      basePrice: (data['basePrice'] ?? 0).toDouble(),
-      imageUrl: data['imageUrl'],
-      isActive: data['isActive'] ?? true,
+      type: data['type'] ?? 'Futsal',
+      basePrice: data['basePrice'] ?? 0,
+      imageUrl: data['imageUrl'] ?? 'https://via.placeholder.com/150',
       facilities: List<String>.from(data['facilities'] ?? []),
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+      isActive: data['isActive'] ?? true,
+      isPopular: data['isPopular'] ?? false,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toMap() {
     return {
       'name': name,
       'description': description,
+      'type': type,
       'basePrice': basePrice,
       'imageUrl': imageUrl,
-      'isActive': isActive,
       'facilities': facilities,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
+      'isActive': isActive,
+      'isPopular': isPopular,
+      'updatedAt': DateTime.now().toIso8601String(),
     };
   }
 
+  /// Create a copy with updated values
   FieldModel copyWith({
-    String? fieldId,
+    String? id,
     String? name,
     String? description,
-    double? basePrice,
+    String? type,
+    int? basePrice,
     String? imageUrl,
-    bool? isActive,
     List<String>? facilities,
-    DateTime? createdAt,
-    DateTime? updatedAt,
+    bool? isActive,
+    bool? isPopular,
   }) {
     return FieldModel(
-      fieldId: fieldId ?? this.fieldId,
+      id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      type: type ?? this.type,
       basePrice: basePrice ?? this.basePrice,
       imageUrl: imageUrl ?? this.imageUrl,
-      isActive: isActive ?? this.isActive,
       facilities: facilities ?? this.facilities,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      isActive: isActive ?? this.isActive,
+      isPopular: isPopular ?? this.isPopular,
     );
   }
 }

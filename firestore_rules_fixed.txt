@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Fungsi bantuan untuk cek role admin
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- USERS COLLECTION ---
+    match /users/{userId} {
+      // User bisa baca/tulis datanya sendiri. Admin bisa baca semua.
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // Validasi: User tidak boleh mengubah role mereka sendiri via client app
+      // (Mencegah privilege escalation)
+      allow update: if request.auth != null 
+                    && request.auth.uid == userId
+                    && request.resource.data.role == resource.data.role; 
+    }
+
+    // --- FIELDS COLLECTION ---
+    match /fields/{fieldId} {
+      // Semua orang (termasuk belum login jika mau) bisa lihat lapangan
+      allow read: if true;
+      // Hanya admin yang bisa tambah/edit/hapus lapangan
+      allow write: if request.auth != null && isAdmin();
+    }
+
+    // --- BOOKINGS COLLECTION ---
+    match /bookings/{bookingId} {
+      // FIXED: User baca booking sendiri, Admin baca semua
+      // Use resource.data for existing documents, not request.resource.data
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Create: User bisa booking untuk diri sendiri
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      
+      // Update/Delete: User hanya bisa cancel punya sendiri, Admin full access
+      allow update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+  }
+}

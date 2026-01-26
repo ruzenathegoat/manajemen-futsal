@@ -1,111 +1,111 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/utils/validators.dart';
+import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/core.dart';
 import '../../models/field_model.dart';
-import '../../providers/field_provider.dart';
-import '../../widgets/cards/field_card.dart';
-import '../../widgets/common/custom_button.dart';
-import '../../widgets/common/custom_text_field.dart';
+import '../../services/firestore_service.dart';
+import '../../widgets/widgets.dart';
+import 'add_edit_field_screen.dart';
 
-class FieldManagementScreen extends StatefulWidget {
-  const FieldManagementScreen({super.key});
-
-  @override
-  State<FieldManagementScreen> createState() => _FieldManagementScreenState();
-}
-
-class _FieldManagementScreenState extends State<FieldManagementScreen> {
-  String _searchQuery = '';
-  bool _showActiveOnly = false;
+/// FutsalPro Field Management Screen
+/// Admin screen to manage futsal fields
+class FieldManagementScreen extends StatelessWidget {
+  final bool embedded;
+  
+  const FieldManagementScreen({super.key, this.embedded = false});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fieldProvider = context.watch<FieldProvider>();
-
-    final fields = fieldProvider.fields.where((field) {
-      if (_showActiveOnly && !field.isActive) return false;
-      if (_searchQuery.isEmpty) return true;
-      return field.name.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    final FirestoreService firestoreService = FirestoreService();
+    final currencyFormat = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
 
     return Scaffold(
+      backgroundColor: AppColors.backgroundDark,
+      appBar: embedded ? null : const ProAppBar(title: 'Kelola Lapangan'),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showFieldForm(context),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Tambah'),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddEditFieldScreen()),
+          );
+        },
         backgroundColor: AppColors.primary,
+        foregroundColor: Colors.black,
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+      body: SafeArea(
+        top: embedded,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSearchAndFilter(isDark),
-            const SizedBox(height: 16),
-            Expanded(
-              child: fields.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Belum ada lapangan',
-                        style: TextStyle(
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
+            if (embedded)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Kelola Lapangan',
+                          style: AppTypography.headlineSmall(AppColors.textPrimaryDark),
                         ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: fields.length,
-                      itemBuilder: (context, index) {
-                        final field = fields[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Stack(
-                            children: [
-                              FieldCard(
-                                field: field,
-                                showStatus: true,
-                                onTap: () => _showFieldForm(context, field: field),
-                              ),
-                              Positioned(
-                                top: 12,
-                                left: 12,
-                                child: PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      _showFieldForm(context, field: field);
-                                    } else if (value == 'delete') {
-                                      _confirmDelete(field.fieldId);
-                                    } else if (value == 'toggle') {
-                                      fieldProvider.toggleFieldStatus(
-                                        field.fieldId,
-                                        !field.isActive,
-                                      );
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Edit'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(field.isActive ? 'Nonaktifkan' : 'Aktifkan'),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text('Hapus'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                        Text(
+                          'Tambah, edit, atau hapus lapangan',
+                          style: AppTypography.bodySmall(AppColors.textSecondaryDark),
+                        ),
+                      ],
                     ),
+                  ],
+                ),
+              ),
+            
+            Expanded(
+              child: StreamBuilder<List<FieldModel>>(
+                stream: firestoreService.getFields(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return _buildErrorState(snapshot.error.toString());
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return _buildLoadingState();
+                  }
+
+                  final fields = snapshot.data ?? [];
+
+                  if (fields.isEmpty) {
+                    return _buildEmptyState(context);
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: fields.length,
+                    itemBuilder: (context, index) {
+                      final field = fields[index];
+                      return _FieldCard(
+                        field: field,
+                        currencyFormat: currencyFormat,
+                        onEdit: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AddEditFieldScreen(field: field),
+                            ),
+                          );
+                        },
+                        onDelete: () => _showDeleteDialog(context, field, firestoreService),
+                        onToggleStatus: () => _toggleFieldStatus(context, field, firestoreService),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -113,183 +113,328 @@ class _FieldManagementScreenState extends State<FieldManagementScreen> {
     );
   }
 
-  Widget _buildSearchAndFilter(bool isDark) {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+  Widget _buildLoadingState() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 3,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: ProShimmerCard(height: 120, showImage: false, lines: 3),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline, size: 48, color: AppColors.error),
+          const SizedBox(height: 16),
+          Text(
+            'Terjadi kesalahan',
+            style: AppTypography.titleMedium(AppColors.textPrimaryDark),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            error,
+            style: AppTypography.bodySmall(AppColors.textSecondaryDark),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : AppColors.lightCard,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              ),
+              color: AppColors.surfaceDark,
+              shape: BoxShape.circle,
             ),
-            child: TextField(
-              onChanged: (value) => setState(() => _searchQuery = value),
-              decoration: const InputDecoration(
-                hintText: 'Cari lapangan...',
-                border: InputBorder.none,
-                icon: Icon(Icons.search_rounded),
-              ),
+            child: Icon(
+              Icons.stadium_outlined,
+              size: 48,
+              color: AppColors.textTertiaryDark,
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        FilterChip(
-          label: const Text('Aktif'),
-          selected: _showActiveOnly,
-          onSelected: (value) => setState(() => _showActiveOnly = value),
-          selectedColor: AppColors.primary,
-          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-          labelStyle: TextStyle(
-            color: _showActiveOnly ? Colors.white : AppColors.primary,
-            fontWeight: FontWeight.w600,
+          const SizedBox(height: 16),
+          Text(
+            'Belum ada lapangan',
+            style: AppTypography.titleMedium(AppColors.textPrimaryDark),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            'Tambahkan lapangan pertama anda',
+            style: AppTypography.bodyMedium(AppColors.textSecondaryDark),
+          ),
+          const SizedBox(height: 24),
+          ProButton(
+            text: 'Tambah Lapangan',
+            leadingIcon: Icons.add,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddEditFieldScreen()),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  void _showFieldForm(BuildContext context, {FieldModel? field}) {
-    final nameController = TextEditingController(text: field?.name ?? '');
-    final descriptionController =
-        TextEditingController(text: field?.description ?? '');
-    final priceController = TextEditingController(
-      text: field?.basePrice.toStringAsFixed(0) ?? '',
-    );
-    final imageController = TextEditingController(text: field?.imageUrl ?? '');
-    bool isActive = field?.isActive ?? true;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 20,
-                right: 20,
-                top: 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    field == null ? 'Tambah Lapangan' : 'Edit Lapangan',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomTextField(
-                    label: 'Nama Lapangan',
-                    controller: nameController,
-                    validator: (value) => Validators.validateRequired(value, 'Nama'),
-                  ),
-                  const SizedBox(height: 12),
-                  CustomTextField(
-                    label: 'Deskripsi',
-                    controller: descriptionController,
-                    maxLines: 3,
-                    validator: (value) =>
-                        Validators.validateRequired(value, 'Deskripsi'),
-                  ),
-                  const SizedBox(height: 12),
-                  CustomTextField(
-                    label: 'Harga Dasar',
-                    controller: priceController,
-                    keyboardType: TextInputType.number,
-                    validator: Validators.validatePrice,
-                  ),
-                  const SizedBox(height: 12),
-                  CustomTextField(
-                    label: 'Image URL',
-                    controller: imageController,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Switch(
-                        value: isActive,
-                        onChanged: (value) => setModalState(() => isActive = value),
-                        activeThumbColor: AppColors.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(isActive ? 'Aktif' : 'Nonaktif'),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  CustomButton(
-                    text: field == null ? 'Simpan' : 'Update',
-                    isFullWidth: true,
-                    onPressed: () async {
-                      final provider = context.read<FieldProvider>();
-                      final price = double.tryParse(
-                            priceController.text.replaceAll(RegExp(r'[^0-9]'), ''),
-                          ) ??
-                          0;
-
-                      if (field == null) {
-                        await provider.createField(
-                          name: nameController.text,
-                          description: descriptionController.text,
-                          basePrice: price,
-                          imageUrl: imageController.text,
-                        );
-                      } else {
-                        await provider.updateField(
-                          fieldId: field.fieldId,
-                          name: nameController.text,
-                          description: descriptionController.text,
-                          basePrice: price,
-                          imageUrl: imageController.text,
-                          isActive: isActive,
-                        );
-                      }
-
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _confirmDelete(String fieldId) {
+  void _showDeleteDialog(
+    BuildContext context,
+    FieldModel field,
+    FirestoreService firestoreService,
+  ) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Hapus Lapangan'),
-          content: const Text('Apakah Anda yakin ingin menghapus lapangan ini?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppSpacing.borderRadiusXl,
+        ),
+        title: Text(
+          'Hapus Lapangan?',
+          style: AppTypography.titleLarge(AppColors.textPrimaryDark),
+        ),
+        content: Text(
+          'Apakah anda yakin ingin menghapus "${field.name}"?',
+          style: AppTypography.bodyMedium(AppColors.textSecondaryDark),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Batal',
+              style: AppTypography.buttonMedium(AppColors.textSecondaryDark),
             ),
-            TextButton(
-              onPressed: () async {
-                await context.read<FieldProvider>().deleteField(fieldId);
-                if (!context.mounted) return;
-                Navigator.pop(context);
-              },
-              child: const Text('Hapus'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await firestoreService.deleteField(field.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${field.name} berhasil dihapus'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
             ),
-          ],
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleFieldStatus(
+    BuildContext context,
+    FieldModel field,
+    FirestoreService firestoreService,
+  ) async {
+    try {
+      final updatedField = field.copyWith(isActive: !field.isActive);
+      await firestoreService.updateField(updatedField);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              field.isActive
+                  ? '${field.name} dinonaktifkan'
+                  : '${field.name} diaktifkan',
+            ),
+            backgroundColor: AppColors.success,
+          ),
         );
-      },
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+}
+
+class _FieldCard extends StatelessWidget {
+  final FieldModel field;
+  final NumberFormat currencyFormat;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onToggleStatus;
+
+  const _FieldCard({
+    required this.field,
+    required this.currencyFormat,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggleStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: AppSpacing.borderRadiusLg,
+        border: Border.all(color: AppColors.borderDark),
+      ),
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: AppSpacing.borderRadiusLg,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // Image
+              ClipRRect(
+                borderRadius: AppSpacing.borderRadiusMd,
+                child: CachedNetworkImage(
+                  imageUrl: field.imageUrl,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    width: 80,
+                    height: 80,
+                    color: AppColors.surfaceLightDark,
+                    child: const Icon(Icons.stadium, color: AppColors.textTertiaryDark),
+                  ),
+                  errorWidget: (_, __, ___) => Container(
+                    width: 80,
+                    height: 80,
+                    color: AppColors.surfaceLightDark,
+                    child: const Icon(Icons.broken_image, color: AppColors.textTertiaryDark),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            field.name,
+                            style: AppTypography.titleSmall(AppColors.textPrimaryDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        ProBadge(
+                          text: field.isActive ? 'Aktif' : 'Nonaktif',
+                          variant: field.isActive
+                              ? ProBadgeVariant.success
+                              : ProBadgeVariant.error,
+                          size: ProBadgeSize.small,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${currencyFormat.format(field.basePrice)} / jam',
+                      style: AppTypography.priceSmall(AppColors.primary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      field.facilities.isNotEmpty
+                          ? field.facilities.join(' • ')
+                          : 'Tidak ada fasilitas',
+                      style: AppTypography.caption(AppColors.textSecondaryDark),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Actions
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, color: AppColors.textSecondaryDark),
+                color: AppColors.surfaceDark,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppSpacing.borderRadiusMd,
+                  side: BorderSide(color: AppColors.borderDark),
+                ),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'edit':
+                      onEdit();
+                      break;
+                    case 'toggle':
+                      onToggleStatus();
+                      break;
+                    case 'delete':
+                      onDelete();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20, color: AppColors.textPrimaryDark),
+                        const SizedBox(width: 12),
+                        Text('Edit', style: AppTypography.bodyMedium(AppColors.textPrimaryDark)),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: Row(
+                      children: [
+                        Icon(
+                          field.isActive ? Icons.visibility_off : Icons.visibility,
+                          size: 20,
+                          color: AppColors.textPrimaryDark,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          field.isActive ? 'Nonaktifkan' : 'Aktifkan',
+                          style: AppTypography.bodyMedium(AppColors.textPrimaryDark),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: AppColors.error),
+                        const SizedBox(width: 12),
+                        Text('Hapus', style: AppTypography.bodyMedium(AppColors.error)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

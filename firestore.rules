@@ -1,74 +1,102 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Check if user is the owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Check if user is owner OR admin
+    function isOwnerOrAdmin(userId) {
+      return isOwner(userId) || isAdmin();
+    }
 
-    // ==================== USERS COLLECTION ====================
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
     match /users/{userId} {
-      // Allow read if:
-      // 1. User is reading their own document, OR
-      // 2. User is an admin (can read all user documents)
-      allow read: if request.auth != null && (
-        request.auth.uid == userId || 
-        isAdmin(request.auth.uid)
-      );
+      // READ: User can read own data, Admin can read all users
+      allow read: if isOwnerOrAdmin(userId);
       
-      // Allow create if:
-      // User is creating their own document with role='user'
-      allow create: if request.auth != null && 
-        request.auth.uid == userId &&
-        request.resource.data.role == 'user';
+      // CREATE: 
+      // - User can create their own document during registration
+      // - Admin can create any user document (for User Management)
+      allow create: if isOwner(userId) || isAdmin();
       
-      // Allow update if:
-      // 1. User is updating their own document (cannot change role), OR
-      // 2. User is an admin
-      allow update: if request.auth != null && (
+      // UPDATE:
+      // - User can update own profile BUT cannot change their role
+      // - Admin can update any user including role changes
+      allow update: if isAuthenticated() && (
+        // User updating themselves (cannot change role)
         (request.auth.uid == userId && 
-         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])) ||
-        isAdmin(request.auth.uid)
+         request.resource.data.role == resource.data.role)
+        ||
+        // Admin can update anyone (including role)
+        isAdmin()
       );
       
-      // Only admins can delete
-      allow delete: if request.auth != null && isAdmin(request.auth.uid);
+      // DELETE: Only admin can delete users
+      allow delete: if isAdmin();
     }
 
-    // ==================== FIELDS COLLECTION ====================
+    // ============================================
+    // FIELDS COLLECTION
+    // ============================================
     match /fields/{fieldId} {
-      // Anyone authenticated can read
-      allow read: if request.auth != null;
+      // READ: Public - anyone can view available fields
+      allow read: if true;
       
-      // Only admins can write
-      allow create, update, delete: if request.auth != null && isAdmin(request.auth.uid);
+      // WRITE: Only admin can manage fields
+      allow create, update, delete: if isAdmin();
     }
 
-    // ==================== BOOKINGS COLLECTION ====================
+    // ============================================
+    // BOOKINGS COLLECTION
+    // ============================================
     match /bookings/{bookingId} {
-      // Allow read if user owns the booking or is admin
-      allow read: if request.auth != null && (
-        resource.data.userId == request.auth.uid ||
-        isAdmin(request.auth.uid)
+      // READ: 
+      // - Any authenticated user can READ bookings to check availability
+      // - This is necessary for the booking screen to query existing bookings
+      //   when checking slot availability across all users
+      allow read: if isAuthenticated();
+      
+      // CREATE: 
+      // - User can create booking for themselves only
+      // - Validates that userId in document matches authenticated user
+      allow create: if isAuthenticated() && 
+                    request.resource.data.userId == request.auth.uid;
+      
+      // UPDATE:
+      // - User can update own bookings (e.g., cancel)
+      // - Admin can update any booking (approve, complete, cancel)
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
       );
       
-      // Allow create if user is creating their own booking
-      allow create: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
-      
-      // Allow update if:
-      // 1. User owns the booking and is cancelling, OR
-      // 2. User is admin
-      allow update: if request.auth != null && (
-        (resource.data.userId == request.auth.uid) ||
-        isAdmin(request.auth.uid)
+      // DELETE:
+      // - User can delete own bookings
+      // - Admin can delete any booking
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
       );
-      
-      // Only admins can delete
-      allow delete: if request.auth != null && isAdmin(request.auth.uid);
-    }
-
-    // ==================== HELPER FUNCTION ====================
-    function isAdmin(uid) {
-      let userDoc = get(/databases/$(database)/documents/users/$(uid));
-      return userDoc != null && userDoc.data.role == 'admin';
     }
   }
 }

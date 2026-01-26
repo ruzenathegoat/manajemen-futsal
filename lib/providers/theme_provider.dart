@@ -1,66 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/theme/app_theme.dart';
 
-class ThemeProvider extends ChangeNotifier {
-  static const String _themeKey = 'theme_preference';
+/// FutsalPro Theme Provider
+/// Manages app-wide theme state with persistence
+class ThemeProvider with ChangeNotifier {
+  static const String _themeKey = 'isDarkMode';
   
-  ThemeMode _themeMode = ThemeMode.system;
+  bool _isDarkMode = true; // Default to dark mode for premium look
+  bool _isInitialized = false;
   
-  ThemeMode get themeMode => _themeMode;
-  
-  bool get isDarkMode {
-    if (_themeMode == ThemeMode.system) {
-      return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
-    }
-    return _themeMode == ThemeMode.dark;
-  }
+  bool get isDarkMode => _isDarkMode;
+  bool get isInitialized => _isInitialized;
 
   ThemeProvider() {
     _loadTheme();
   }
 
-  Future<void> _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    final themeString = prefs.getString(_themeKey) ?? 'system';
-    _themeMode = _stringToThemeMode(themeString);
+  /// Toggle between light and dark themes
+  Future<void> toggleTheme() async {
+    _isDarkMode = !_isDarkMode;
     notifyListeners();
+    
+    // Persist preference
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_themeKey, _isDarkMode);
   }
 
-  Future<void> setTheme(ThemeMode mode) async {
-    _themeMode = mode;
+  /// Set specific theme mode
+  Future<void> setDarkMode(bool isDark) async {
+    if (_isDarkMode == isDark) return;
+    
+    _isDarkMode = isDark;
     notifyListeners();
     
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeKey, _themeModeToString(mode));
+    await prefs.setBool(_themeKey, _isDarkMode);
   }
 
-  Future<void> toggleTheme() async {
-    if (_themeMode == ThemeMode.light) {
-      await setTheme(ThemeMode.dark);
-    } else {
-      await setTheme(ThemeMode.light);
-    }
+  /// Load saved theme preference
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDarkMode = prefs.getBool(_themeKey) ?? true; // Default dark mode
+    _isInitialized = true;
+    notifyListeners();
   }
 
-  String _themeModeToString(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        return 'light';
-      case ThemeMode.dark:
-        return 'dark';
-      case ThemeMode.system:
-        return 'system';
-    }
-  }
+  /// Get the current theme data
+  ThemeData get currentTheme => _isDarkMode ? darkTheme : lightTheme;
 
-  ThemeMode _stringToThemeMode(String value) {
-    switch (value) {
-      case 'light':
-        return ThemeMode.light;
-      case 'dark':
-        return ThemeMode.dark;
-      default:
-        return ThemeMode.system;
-    }
-  }
+  /// Light theme using the new design system
+  ThemeData get lightTheme => AppTheme.lightTheme;
+
+  /// Dark theme using the new design system
+  ThemeData get darkTheme => AppTheme.darkTheme;
 }
