@@ -30,6 +30,16 @@ bookings/{bookingId}
   userId, userName, userEmail, fieldId, fieldName, date, timeSlot,
   basePrice, finalPrice, status, qrCodeData, createdAt
 
+<<<<<<< HEAD
+=======
+## Auth Flow Notes
+- Admin accounts are created manually in Firestore.
+```
+
+## Firestore Rules
+The complete Firestore rules are in `firestore.rules`. Deploy them to your Firebase project.
+
+>>>>>>> 023fedc4f08f4f23684c8552782a6fe68046007a
 **Key security features:**
 - Users can only read/write their own documents
 - Users can create bookings for themselves
